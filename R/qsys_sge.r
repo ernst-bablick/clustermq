@@ -57,6 +57,79 @@ SGE = R6::R6Class("SGE",
     cloneable = FALSE
 )
 
+#' Class for Open Cluster Scheduler (OCS)
+OCS = R6::R6Class("OCS",
+    inherit = QSys,
+
+    public = list(
+        initialize = function(addr, n_jobs, master, ..., template=getOption("clustermq.template", class(self)[1]),
+                              log_worker=FALSE, log_file=NULL, verbose=TRUE) {
+            super$initialize(addr=addr, master=master, template=template)
+
+            # fill the template with options and required fields
+            opts = private$fill_options(n_jobs=n_jobs, ...)
+            filled = fill_template(private$template, opts, required=c("master", "n_jobs"))
+
+            private$job_name = opts$job_name
+            if (verbose)
+                message("Submitting ", n_jobs, " worker jobs to ", class(self)[1], " as ", sQuote(private$job_name), " ...")
+
+            # submit the job with qsub (stdin-based) and capture the output
+            # on success the output will contain the job id, on failure the error message
+            private$qsub_stdout = system2("qsub", input=filled, stdout=TRUE)
+
+            # check the return code and stop on error
+            status = attr(private$qsub_stdout, "status")
+            if (!is.null(status) && status != 0)
+                private$template_error(class(self)[1], status, filled)
+
+            # try to read the job ID from stdout. On error stop
+            private$job_id <- regmatches(private$qsub_stdout, regexpr("^[0-9]+", private$qsub_stdout))
+            if (length(private$job_id) == 0)
+                private$template_error(class(self)[1], private$qsub_stdout, filled)
+
+            # if we got here, we have a job ID and can proceed
+            if (verbose)
+               message("Submitted job has ID ", private$job_id)
+
+            private$master$add_pending_workers(n_jobs)
+            private$is_cleaned_up = FALSE
+        },
+
+        cleanup = function(success, timeout) {
+            # first call finalize to send qdel ...
+            private$finalize()
+
+            # ... then set the cleaned up flag to avoid sending qdel again
+            private$is_cleaned_up = success
+        }
+    ),
+
+    private = list(
+        qsub_stdout = NULL,
+        job_name = NULL,
+        job_id = NULL,
+
+        finalize = function(quiet = TRUE) {
+            if (!private$is_cleaned_up) {
+                system(paste("qdel", private$job_id), ignore.stdout=quiet, ignore.stderr=quiet, wait=FALSE)
+            }
+            private$is_cleaned_up = TRUE
+        }
+    ),
+
+    cloneable = FALSE
+)
+
+#' Class for Gridware Cluster Scheduler (GCS)
+GCS = R6::R6Class("GCS",
+    inherit = OCS,
+    cloneable = FALSE
+
+    # no changes needed, but we want to have a separate class for GCS to allow for GCS-specific
+    # templates and enterprise edition options
+)
+
 PBS = R6::R6Class("PBS",
     inherit = SGE,
 

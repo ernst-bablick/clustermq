@@ -10,9 +10,9 @@
     qsys_default = toupper(getOption('clustermq.scheduler'))
 
     if (length(qsys_default) == 0) {
-        qname = c("SLURM", "LSF", "SGE", "LOCAL")
-        exec = Sys.which(c("sbatch", "bsub", "qsub"))
-        select = c(which(nchar(exec) > 0), 4)[1]
+        qname = c("SLURM", "LSF", "SGE", "GCS", "OCS", "LOCAL")
+        exec = Sys.which(c("sbatch", "bsub", "qsub", "qsub", "qsub"))
+        select = c(which(nchar(exec) > 0), 6)[1]
         qsys_default = qname[select]
     }
 
@@ -26,8 +26,7 @@
 #' @keywords internal
 .onAttach = function(libname, pkgname) {
     if (is.null(getOption("clustermq.scheduler"))) {
-        packageStartupMessage("* Option 'clustermq.scheduler' not set, ",
-                "defaulting to ", sQuote(qsys_default))
+        packageStartupMessage("* Option 'clustermq.scheduler' not set, ", "defaulting to ", sQuote(qsys_default))
         packageStartupMessage("--- see: https://mschubert.github.io/clustermq/articles/userguide.html#configuration")
     }
     if (!libzmq_has_draft()) {
